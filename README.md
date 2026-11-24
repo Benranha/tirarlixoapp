@@ -68,3 +68,14 @@ Depois, no `firmware/esp32/esp32.ino`, preencha o Wi-Fi, a URL do app e o `DEVIC
 ## Notificações no iPhone
 
 O iOS só permite push em páginas adicionadas à tela inicial (Compartilhar > Adicionar à Tela de Início). Abra o app por esse ícone antes de tocar em "Ativar notificações".
+
+## Raspberry Pi 3 como ponte (sem computador)
+
+O UNO fica ligado na USB do Raspberry, e o Pi manda os dados pelo Wi-Fi dele. Não precisa de ESP32.
+
+1. Grave `firmware/uno` no Arduino (pelo Mac ou pelo próprio Pi com arduino-cli).
+2. Copie a pasta `raspberry/` para o Pi, por exemplo `scp -r raspberry pi@raspberrypi.local:~/`.
+3. No Pi: `cd raspberry && sudo bash instalar.sh`. Ele pede a URL da API e o `DEVICE_TOKEN`.
+4. Acompanhe com `journalctl -u tirarlixo -f`. O serviço sobe sozinho a cada boot e reconecta se o Arduino for desligado.
+
+Se quiser dispensar o Arduino, o Pi lê o botão direto no GPIO, mas não tem entrada analógica: para o sensor de nível seria preciso um conversor como o MCP3008. Por isso a dupla Pi + UNO é o caminho mais simples.
