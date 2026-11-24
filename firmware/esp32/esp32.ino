@@ -1,5 +1,5 @@
-// Tirar o Lixo - versão ESP32 (final, sem cabo). Mesma lógica do UNO,
-// mas envia direto para o servidor via Wi-Fi.
+// Tirar o Lixo - versão ESP32 (sem cabo). Mesma lógica do UNO, enviando via Wi-Fi.
+// Botão marca CHEIA; o sensor abaixo de LIMIAR_VAZIO por TEMPO_VAZIO_MS reseta sozinho.
 //
 // Ligações:
 //   Botão: entre o GPIO 4 e GND (pull-up interno).
@@ -21,6 +21,8 @@ const char* TOKEN      = "COLE_AQUI_O_DEVICE_TOKEN";
 const int PINO_BOTAO = 4;
 const int PINO_ANALOGICO = 34;
 const int PINO_LED = 2;
+const int LIMIAR_VAZIO = 20;
+const unsigned long TEMPO_VAZIO_MS = 3000;
 const unsigned long DEBOUNCE_MS = 50;
 const unsigned long INTERVALO_ENVIO_MS = 15000;
 
@@ -29,6 +31,8 @@ int ultimoBotao = HIGH;
 unsigned long ultimaMudancaBotao = 0;
 unsigned long ultimoEnvio = 0;
 int ultimoNivelEnviado = -1;
+unsigned long inicioBaixo = 0;
+int estadoEstavel = HIGH;
 
 int lerNivel() {
   long soma = 0;
@@ -69,17 +73,18 @@ void setup() {
 }
 
 void loop() {
+  int nivel = lerNivel();
   int leitura = digitalRead(PINO_BOTAO);
   if (leitura != ultimoBotao) { ultimaMudancaBotao = millis(); ultimoBotao = leitura; }
-  static int estadoEstavel = HIGH;
   if (millis() - ultimaMudancaBotao > DEBOUNCE_MS && leitura != estadoEstavel) {
     estadoEstavel = leitura;
-    if (estadoEstavel == LOW) {
-      cheio = !cheio;
-      digitalWrite(PINO_LED, cheio);
-      enviar(lerNivel());
-    }
+    if (estadoEstavel == LOW && !cheio) { cheio = true; digitalWrite(PINO_LED, HIGH); inicioBaixo = 0; enviar(nivel); }
   }
-  int nivel = lerNivel();
+  if (cheio) {
+    if (nivel < LIMIAR_VAZIO) {
+      if (inicioBaixo == 0) inicioBaixo = millis();
+      else if (millis() - inicioBaixo >= TEMPO_VAZIO_MS) { cheio = false; digitalWrite(PINO_LED, LOW); inicioBaixo = 0; enviar(nivel); }
+    } else inicioBaixo = 0;
+  }
   if (millis() - ultimoEnvio > INTERVALO_ENVIO_MS && abs(nivel - ultimoNivelEnviado) >= 3) enviar(nivel);
 }

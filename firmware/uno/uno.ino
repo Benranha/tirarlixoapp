@@ -1,6 +1,10 @@
-// Tirar o Lixo - versão Arduino UNO (teste via USB).
-// A placa envia linhas pela serial: ESTADO cheio=0|1 nivel=0..100
-// O script ponte/ponte.js no computador repassa para o servidor.
+// Tirar o Lixo - versão Arduino UNO (ligado na USB do Raspberry Pi ou do computador).
+// Envia linhas pela serial: ESTADO cheio=0|1 nivel=0..100
+//
+// Regras:
+//   - Apertar o botão marca a lixeira como CHEIA (não desmarca).
+//   - A lixeira volta a VAZIA sozinha quando o sensor fica abaixo de LIMIAR_VAZIO
+//     por TEMPO_VAZIO_MS seguidos (a lixeira foi esvaziada).
 //
 // Ligações:
 //   Botão: entre o pino 2 e GND (usa pull-up interno).
@@ -9,13 +13,17 @@
 
 const int PINO_BOTAO = 2;
 const int PINO_ANALOGICO = A0;
+const int LIMIAR_VAZIO = 20;                 // % abaixo do qual considera esvaziada
+const unsigned long TEMPO_VAZIO_MS = 3000;   // precisa ficar baixo por 3 s
 const unsigned long DEBOUNCE_MS = 50;
 const unsigned long INTERVALO_ENVIO_MS = 2000;
 
 bool cheio = false;
 int ultimoBotao = HIGH;
+int estadoEstavel = HIGH;
 unsigned long ultimaMudancaBotao = 0;
 unsigned long ultimoEnvio = 0;
+unsigned long inicioBaixo = 0;
 int ultimoNivelEnviado = -1;
 
 int lerNivel() {
@@ -42,23 +50,36 @@ void setup() {
 }
 
 void loop() {
+  int nivel = lerNivel();
+
+  // Botão: marca como cheia.
   int leitura = digitalRead(PINO_BOTAO);
-  if (leitura != ultimoBotao) {
-    ultimaMudancaBotao = millis();
-    ultimoBotao = leitura;
-  }
-  static int estadoEstavel = HIGH;
+  if (leitura != ultimoBotao) { ultimaMudancaBotao = millis(); ultimoBotao = leitura; }
   if (millis() - ultimaMudancaBotao > DEBOUNCE_MS && leitura != estadoEstavel) {
     estadoEstavel = leitura;
-    if (estadoEstavel == LOW) {          // botão apertado
-      cheio = !cheio;                     // alterna cheio / vazio
-      digitalWrite(LED_BUILTIN, cheio);
-      enviar(lerNivel());
+    if (estadoEstavel == LOW && !cheio) {
+      cheio = true;
+      digitalWrite(LED_BUILTIN, HIGH);
+      inicioBaixo = 0;
+      enviar(nivel);
     }
   }
 
-  int nivel = lerNivel();
-  if (millis() - ultimoEnvio > INTERVALO_ENVIO_MS && abs(nivel - ultimoNivelEnviado) >= 3) {
-    enviar(nivel);
+  // Sensor: reseta sozinho quando fica baixo por um tempo.
+  if (cheio) {
+    if (nivel < LIMIAR_VAZIO) {
+      if (inicioBaixo == 0) inicioBaixo = millis();
+      else if (millis() - inicioBaixo >= TEMPO_VAZIO_MS) {
+        cheio = false;
+        digitalWrite(LED_BUILTIN, LOW);
+        inicioBaixo = 0;
+        enviar(nivel);
+      }
+    } else {
+      inicioBaixo = 0;
+    }
   }
+
+  // Envio periódico do nível quando muda.
+  if (millis() - ultimoEnvio > INTERVALO_ENVIO_MS && abs(nivel - ultimoNivelEnviado) >= 3) enviar(nivel);
 }
