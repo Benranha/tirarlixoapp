@@ -56,21 +56,15 @@ export default function Page() {
     setMsg(`Notificação de teste enviada para ${r.notificados} aparelho(s).`);
   }
 
-  const nivel = estado?.nivel ?? 0;
-  const classe = estado?.cheio ? "bad" : nivel >= 75 ? "warn" : "ok";
-  const texto = !estado ? "Carregando…" : estado.cheio ? "O lixo tá cheio" : nivel >= 75 ? "Quase cheio" : "Tudo certo";
-  const cor = classe === "bad" ? "var(--bad)" : classe === "warn" ? "var(--warn)" : "var(--ok)";
+  const classe = estado?.cheio ? "bad" : "ok";
+  const texto = !estado ? "Carregando…" : estado.cheio ? "O lixo tá cheio" : "Tudo certo";
 
   return (
     <main>
       <h1>🗑️ Tirar o Lixo</h1>
       <div className={`status ${classe}`}>{texto}</div>
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Nível da lixeira</span><strong>{nivel}%</strong>
-        </div>
-        <div className="barra"><div style={{ width: `${nivel}%`, background: cor }} /></div>
-        <p className="muted">
+        <p className="muted" style={{ margin: 0 }}>
           {estado && estado.atualizado_em !== new Date(0).toISOString()
             ? `Atualizado ${new Date(estado.atualizado_em).toLocaleString("pt-BR")}`
             : "Aguardando a primeira leitura da placa."}
