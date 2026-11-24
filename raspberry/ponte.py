@@ -11,6 +11,7 @@ import glob, json, os, re, sys, time, urllib.request, urllib.error
 import serial  # pip install pyserial
 
 PADRAO = re.compile(r"^ESTADO cheio=(\d) nivel=(\d+)")
+BOTAO = re.compile(r"^BOTAO")
 
 def achar_porta():
     p = os.environ.get("PORTA")
@@ -19,8 +20,8 @@ def achar_porta():
         return c
     return None
 
-def enviar(url, token, cheio, nivel):
-    corpo = json.dumps({"cheio": cheio, "nivel": nivel}).encode()
+def enviar(url, token, corpo):
+    corpo = json.dumps(corpo).encode()
     req = urllib.request.Request(url, data=corpo, method="POST", headers={
         "Content-Type": "application/json", "x-device-token": token})
     with urllib.request.urlopen(req, timeout=15) as r:
@@ -39,13 +40,16 @@ def main():
                 print(f"Lendo {porta} e enviando para {url}", flush=True)
                 while True:
                     linha = s.readline().decode(errors="ignore").strip()
-                    m = PADRAO.match(linha)
-                    if not m: continue
-                    cheio, nivel = m.group(1) == "1", int(m.group(2))
+                    if BOTAO.match(linha):
+                        corpo = {"evento": "botao"}
+                    else:
+                        m = PADRAO.match(linha)
+                        if not m: continue
+                        corpo = {"cheio": m.group(1) == "1", "nivel": int(m.group(2))}
                     try:
-                        status, resp = enviar(url, token, cheio, nivel)
+                        status, resp = enviar(url, token, corpo)
                         extra = f" ({resp.get('notificados')} notificados)" if resp.get("notificados") else ""
-                        print(time.strftime("%H:%M:%S"), {"cheio": cheio, "nivel": nivel}, "->", status, extra, flush=True)
+                        print(time.strftime("%H:%M:%S"), corpo, "->", status, "cheio=" + str(resp.get("cheio")), extra, flush=True)
                     except (urllib.error.URLError, OSError) as e:
                         print("Falha ao enviar:", e, flush=True)
         except serial.SerialException as e:

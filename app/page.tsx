@@ -51,6 +51,11 @@ export default function Page() {
     }
   }
 
+  async function marcar(cheio: boolean) {
+    const r = await fetch("/api/marcar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cheio }) });
+    if (r.ok) setEstado(await r.json());
+  }
+
   async function testar() {
     const r = await (await fetch("/api/testar-push", { method: "POST" })).json();
     setMsg(`Notificação de teste enviada para ${r.notificados} aparelho(s).`);
@@ -63,6 +68,9 @@ export default function Page() {
     <main>
       <h1>🗑️ Tirar o Lixo</h1>
       <div className={`status ${classe}`}>{texto}</div>
+      {estado && (estado.cheio
+        ? <button className="primary" onClick={() => marcar(false)}>Esvaziei o lixo</button>
+        : <button onClick={() => marcar(true)}>Marcar como cheio</button>)}
       <div className="card">
         <p className="muted" style={{ margin: 0 }}>
           {estado && estado.atualizado_em !== new Date(0).toISOString()
