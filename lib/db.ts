@@ -15,7 +15,8 @@ function garantirSchema() {
       await sql`CREATE TABLE IF NOT EXISTS estado (
         id integer PRIMARY KEY, cheio boolean NOT NULL DEFAULT false,
         nivel integer NOT NULL DEFAULT 0, atualizado_em timestamptz NOT NULL DEFAULT now())`;
-      await sql`CREATE TABLE IF NOT EXISTS servo (id integer PRIMARY KEY, angulo integer NOT NULL DEFAULT 90)`;
+      await sql`CREATE TABLE IF NOT EXISTS servo_cmd (id integer PRIMARY KEY, seq integer NOT NULL DEFAULT 0,
+        acao text NOT NULL DEFAULT 'parar', ms integer NOT NULL DEFAULT 0, criado_em timestamptz NOT NULL DEFAULT now())`;
       await sql`CREATE TABLE IF NOT EXISTS inscricoes (
         endpoint text PRIMARY KEY, p256dh text NOT NULL, auth text NOT NULL,
         criado_em timestamptz NOT NULL DEFAULT now())`;
@@ -28,7 +29,7 @@ function garantirSchema() {
 const mem = {
   estado: { cheio: false, nivel: 0, atualizado_em: new Date(0).toISOString() } as Estado,
   inscricoes: new Map<string, Inscricao>(),
-  servo: 90,
+  servo: { seq: 0, acao: "parar", ms: 0 } as ComandoServo,
 };
 
 export async function lerEstado(): Promise<Estado> {
@@ -74,17 +75,21 @@ export async function removerInscricao(endpoint: string) {
   await sql`DELETE FROM inscricoes WHERE endpoint = ${endpoint}`;
 }
 
-export async function lerServo(): Promise<number> {
+export type ComandoServo = { seq: number; acao: "esq" | "dir" | "parar"; ms: number };
+
+export async function lerComandoServo(): Promise<ComandoServo> {
   await garantirSchema();
   if (!sql) return mem.servo;
-  const rows = await sql`SELECT angulo FROM servo WHERE id = 1`;
-  return rows.length ? rows[0].angulo : 90;
+  const rows = await sql`SELECT seq, acao, ms FROM servo_cmd WHERE id = 1`;
+  return rows.length ? { seq: rows[0].seq, acao: rows[0].acao, ms: rows[0].ms } : { seq: 0, acao: "parar", ms: 0 };
 }
 
-export async function salvarServo(angulo: number): Promise<number> {
+export async function novoComandoServo(acao: ComandoServo["acao"], ms: number): Promise<ComandoServo> {
   await garantirSchema();
-  const a = Math.max(0, Math.min(180, Math.round(angulo)));
-  if (!sql) { mem.servo = a; return a; }
-  await sql`INSERT INTO servo (id, angulo) VALUES (1, ${a}) ON CONFLICT (id) DO UPDATE SET angulo = EXCLUDED.angulo`;
-  return a;
+  const m = Math.max(0, Math.min(60000, Math.round(ms)));
+  if (!sql) { mem.servo = { seq: mem.servo.seq + 1, acao, ms: m }; return mem.servo; }
+  const rows = await sql`INSERT INTO servo_cmd (id, seq, acao, ms) VALUES (1, 1, ${acao}, ${m})
+    ON CONFLICT (id) DO UPDATE SET seq = servo_cmd.seq + 1, acao = EXCLUDED.acao, ms = EXCLUDED.ms, criado_em = now()
+    RETURNING seq, acao, ms`;
+  return { seq: rows[0].seq, acao: rows[0].acao, ms: rows[0].ms };
 }

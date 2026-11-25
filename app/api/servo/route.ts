@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { lerServo, salvarServo } from "@/lib/db";
+import { lerComandoServo, novoComandoServo } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json({ angulo: await lerServo() });
+  return NextResponse.json(await lerComandoServo());
 }
 
-// { "angulo": 0..180 } ou { "delta": +15 / -15 }
+// { "acao": "esq" | "dir" | "parar", "ms": 500 }   (ms = 0 gira até mandar parar)
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  let alvo: number;
-  if (typeof body?.angulo === "number") alvo = body.angulo;
-  else if (typeof body?.delta === "number") alvo = (await lerServo()) + body.delta;
-  else return NextResponse.json({ erro: "payload inválido" }, { status: 400 });
-  return NextResponse.json({ angulo: await salvarServo(alvo) });
+  if (!["esq", "dir", "parar"].includes(body?.acao)) return NextResponse.json({ erro: "payload inválido" }, { status: 400 });
+  return NextResponse.json(await novoComandoServo(body.acao, Number(body.ms ?? 0)));
 }

@@ -30,18 +30,24 @@ def enviar(url, token, corpo):
 def consultar_servo(url_estado):
     url = url_estado.replace("/api/estado", "/api/servo")
     with urllib.request.urlopen(url, timeout=10) as r:
-        return int(json.loads(r.read()).get("angulo", 90))
+        return json.loads(r.read())
 
 def laco_servo(s, url_estado, parar):
-    """Consulta o ângulo no servidor a cada segundo e repassa ao Arduino quando muda."""
-    ultimo = None
+    """Consulta o servidor a cada segundo e executa comandos novos do servo 360."""
+    ultimo_seq = None
     while not parar.is_set():
         try:
-            a = consultar_servo(url_estado)
-            if a != ultimo:
-                s.write(f"SERVO {a}\n".encode()); s.flush()
-                print(time.strftime("%H:%M:%S"), f"servo -> {a}°", flush=True)
-                ultimo = a
+            c = consultar_servo(url_estado)
+            seq = int(c.get("seq", 0))
+            if ultimo_seq is None:
+                ultimo_seq = seq          # ignora comandos antigos ao iniciar
+            elif seq > ultimo_seq:
+                ultimo_seq = seq
+                acao, ms = c.get("acao"), int(c.get("ms", 0))
+                if acao == "parar": linha = "PARAR\n"
+                else: linha = f"GIRAR {0 if acao == 'esq' else 180} {ms}\n"
+                s.write(linha.encode()); s.flush()
+                print(time.strftime("%H:%M:%S"), "servo:", linha.strip(), flush=True)
         except Exception as e:
             print("servo: falha ao consultar:", e, flush=True)
         parar.wait(1.0)

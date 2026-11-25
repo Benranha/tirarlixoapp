@@ -6,8 +6,9 @@
 
 const int PINO_BOTAO = 2;
 const int PINO_SERVO = 9;   // sinal do servo (fio laranja/amarelo). VCC no 5V, GND no GND.
-Servo servo;
+Servo servo;                 // servo de rotação contínua: 90 = parado, 0 = um lado, 180 = outro
 String comando;
+unsigned long servoPararEm = 0; // 0 = sem parada agendada
 const unsigned long DEBOUNCE_MS = 50;
 
 int ultimoBotao = HIGH;
@@ -42,10 +43,16 @@ void lerComandos() {
     char c = Serial.read();
     if (c == '\n') {
       comando.trim();
-      if (comando.startsWith("SERVO ")) {
-        int a = constrain(comando.substring(6).toInt(), 0, 180);
-        servo.write(a);
-        Serial.print("SERVO_OK "); Serial.println(a);
+      if (comando.startsWith("GIRAR ")) {           // GIRAR <0..180> <ms>  (ms 0 = até PARAR)
+        int esp = comando.indexOf(' ', 6);
+        int vel = constrain(comando.substring(6, esp).toInt(), 0, 180);
+        long ms = esp > 0 ? comando.substring(esp + 1).toInt() : 0;
+        servo.write(vel);
+        servoPararEm = ms > 0 ? millis() + ms : 0;
+        Serial.print("GIRAR_OK "); Serial.print(vel); Serial.print(' '); Serial.println(ms);
+      } else if (comando == "PARAR") {
+        servo.write(90); servoPararEm = 0;
+        Serial.println("PARAR_OK");
       } else if (comando == "VCC") {
         Serial.print("VCC "); Serial.println(lerVccMv());
       }
@@ -56,6 +63,7 @@ void lerComandos() {
 
 void loop() {
   lerComandos();
+  if (servoPararEm && (long)(millis() - servoPararEm) >= 0) { servo.write(90); servoPararEm = 0; }
   int leitura = digitalRead(PINO_BOTAO);
   if (leitura != ultimoBotao) { ultimaMudancaBotao = millis(); ultimoBotao = leitura; }
   if (millis() - ultimaMudancaBotao > DEBOUNCE_MS && leitura != estadoEstavel) {
