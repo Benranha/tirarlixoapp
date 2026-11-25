@@ -15,6 +15,7 @@ function garantirSchema() {
       await sql`CREATE TABLE IF NOT EXISTS estado (
         id integer PRIMARY KEY, cheio boolean NOT NULL DEFAULT false,
         nivel integer NOT NULL DEFAULT 0, atualizado_em timestamptz NOT NULL DEFAULT now())`;
+      await sql`CREATE TABLE IF NOT EXISTS servo (id integer PRIMARY KEY, angulo integer NOT NULL DEFAULT 90)`;
       await sql`CREATE TABLE IF NOT EXISTS inscricoes (
         endpoint text PRIMARY KEY, p256dh text NOT NULL, auth text NOT NULL,
         criado_em timestamptz NOT NULL DEFAULT now())`;
@@ -27,6 +28,7 @@ function garantirSchema() {
 const mem = {
   estado: { cheio: false, nivel: 0, atualizado_em: new Date(0).toISOString() } as Estado,
   inscricoes: new Map<string, Inscricao>(),
+  servo: 90,
 };
 
 export async function lerEstado(): Promise<Estado> {
@@ -70,4 +72,19 @@ export async function removerInscricao(endpoint: string) {
   await garantirSchema();
   if (!sql) { mem.inscricoes.delete(endpoint); return; }
   await sql`DELETE FROM inscricoes WHERE endpoint = ${endpoint}`;
+}
+
+export async function lerServo(): Promise<number> {
+  await garantirSchema();
+  if (!sql) return mem.servo;
+  const rows = await sql`SELECT angulo FROM servo WHERE id = 1`;
+  return rows.length ? rows[0].angulo : 90;
+}
+
+export async function salvarServo(angulo: number): Promise<number> {
+  await garantirSchema();
+  const a = Math.max(0, Math.min(180, Math.round(angulo)));
+  if (!sql) { mem.servo = a; return a; }
+  await sql`INSERT INTO servo (id, angulo) VALUES (1, ${a}) ON CONFLICT (id) DO UPDATE SET angulo = EXCLUDED.angulo`;
+  return a;
 }

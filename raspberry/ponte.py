@@ -7,7 +7,7 @@ Configuração pelo arquivo /etc/tirarlixo.env (ou variáveis de ambiente):
   API_URL=https://SEU-APP.vercel.app/api/estado
   DEVICE_TOKEN=...
 """
-import glob, json, os, re, sys, time, urllib.request, urllib.error
+import glob, json, os, re, sys, time, threading, urllib.request, urllib.error
 import serial  # pip install pyserial
 
 PADRAO = re.compile(r"^ESTADO cheio=(\d) nivel=(\d+)")
@@ -27,6 +27,25 @@ def enviar(url, token, corpo):
     with urllib.request.urlopen(req, timeout=15) as r:
         return r.status, json.loads(r.read() or b"{}")
 
+def consultar_servo(url_estado):
+    url = url_estado.replace("/api/estado", "/api/servo")
+    with urllib.request.urlopen(url, timeout=10) as r:
+        return int(json.loads(r.read()).get("angulo", 90))
+
+def laco_servo(s, url_estado, parar):
+    """Consulta o ângulo no servidor a cada segundo e repassa ao Arduino quando muda."""
+    ultimo = None
+    while not parar.is_set():
+        try:
+            a = consultar_servo(url_estado)
+            if a != ultimo:
+                s.write(f"SERVO {a}\n".encode()); s.flush()
+                print(time.strftime("%H:%M:%S"), f"servo -> {a}°", flush=True)
+                ultimo = a
+        except Exception as e:
+            print("servo: falha ao consultar:", e, flush=True)
+        parar.wait(1.0)
+
 def main():
     url = os.environ.get("API_URL"); token = os.environ.get("DEVICE_TOKEN")
     if not url or not token:
@@ -38,6 +57,9 @@ def main():
         try:
             with serial.Serial(porta, 9600, timeout=5) as s:
                 print(f"Lendo {porta} e enviando para {url}", flush=True)
+                time.sleep(2)  # espera o Arduino reiniciar ao abrir a porta
+                parar = threading.Event()
+                threading.Thread(target=laco_servo, args=(s, url, parar), daemon=True).start()
                 while True:
                     linha = s.readline().decode(errors="ignore").strip()
                     if BOTAO.match(linha):
@@ -53,6 +75,8 @@ def main():
                     except (urllib.error.URLError, OSError) as e:
                         print("Falha ao enviar:", e, flush=True)
         except serial.SerialException as e:
+            try: parar.set()
+            except NameError: pass
             print("Serial caiu:", e, "- reconectando em 3s", flush=True); time.sleep(3)
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Estado = { cheio: boolean; nivel: number; atualizado_em: string };
 
@@ -96,6 +97,7 @@ export default function Page() {
         )}
         {msg && <p className="muted" style={{ margin: 0 }}>{msg}</p>}
       </div>
+      <p className="muted" style={{ textAlign: "center" }}><Link href="/servo" style={{ color: "var(--fg)" }}>Controlar o servo →</Link></p>
     </main>
   );
 }
