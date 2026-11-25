@@ -26,6 +26,17 @@ void setup() {
   Serial.println("PRONTO");
 }
 
+// Mede a tensão de alimentação (VCC) em milivolts usando a referência interna de 1,1V.
+long lerVccMv() {
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  delay(2);
+  ADCSRA |= _BV(ADSC);
+  while (bit_is_set(ADCSRA, ADSC));
+  long resultado = ADCL;
+  resultado |= ADCH << 8;
+  return 1125300L / resultado;
+}
+
 void lerComandos() {
   while (Serial.available()) {
     char c = Serial.read();
@@ -35,6 +46,8 @@ void lerComandos() {
         int a = constrain(comando.substring(6).toInt(), 0, 180);
         servo.write(a);
         Serial.print("SERVO_OK "); Serial.println(a);
+      } else if (comando == "VCC") {
+        Serial.print("VCC "); Serial.println(lerVccMv());
       }
       comando = "";
     } else if (comando.length() < 32) comando += c;
